@@ -69,6 +69,7 @@ async function run() {
 
   // 🔹 OTT 가져오기
   const otts = await firestoreRequest("otts", "GET", null, accessToken);
+  console.log("OTTS response: ", JSON.stringify(otts, null, 2));
   if (!otts.documents) return console.log("OTT 문서 없음");
 
   for (const ottDoc of otts.documents) {
