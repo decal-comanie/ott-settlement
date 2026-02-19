@@ -2,14 +2,17 @@
 import fetch from "node-fetch";
 import jwt from "jsonwebtoken";
 
+// GitHub Secrets에서 환경변수 가져오기
 const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } =
   process.env;
+
+// private_key 줄바꿈 처리
 const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n");
 
 // Firebase OAuth 토큰 발급
 async function getAccessToken() {
   const iat = Math.floor(Date.now() / 1000);
-  const exp = iat + 3600;
+  const exp = iat + 3600; // 1시간 유효
   const payload = {
     iss: FIREBASE_CLIENT_EMAIL,
     sub: FIREBASE_CLIENT_EMAIL,
@@ -43,71 +46,81 @@ async function firestoreRequest(path, method = "GET", body, accessToken) {
   if (body) options.body = JSON.stringify(body);
   const res = await fetch(url, options);
   const data = await res.json();
+  console.log(`${method} ${path} response:`, JSON.stringify(data, null, 2));
   return data;
 }
 
 // 자동 정산 실행
 async function autoSettlement() {
   const token = await getAccessToken();
-  const today = new Date();
-  const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
 
-  // 1️⃣ OTT 문서 가져오기
+  // 1️⃣ OTT 컬렉션 가져오기
   const ottsRes = await firestoreRequest("otts", "GET", null, token);
-  if (ottsRes.error) return console.error("OTTs 조회 실패:", ottsRes.error);
+  if (ottsRes.error) {
+    console.error("OTTs 조회 실패:", ottsRes.error);
+    return;
+  }
   const otts = ottsRes.documents || [];
+  if (otts.length === 0) {
+    console.log("OTT 문서 없음");
+    return;
+  }
 
-  if (!otts.length) return console.log("OTT 문서 없음");
-
-  // 2️⃣ Subscriptions 문서 가져오기
+  // 2️⃣ subscriptions 컬렉션 가져오기
   const subsRes = await firestoreRequest("subscriptions", "GET", null, token);
-  if (subsRes.error)
-    return console.error("Subscriptions 조회 실패:", subsRes.error);
-  const subs = subsRes.documents || [];
+  if (subsRes.error) {
+    console.error("Subscriptions 조회 실패:", subsRes.error);
+    return;
+  }
+  const subscriptions = subsRes.documents || [];
+
+  // 3️⃣ 오늘 날짜 기준 정산 생성
+  const today = new Date();
+  const yearMonth = `${today.getFullYear()}-${String(
+    today.getMonth() + 1,
+  ).padStart(2, "0")}`;
 
   for (const ottDoc of otts) {
-    const ottId = ottDoc.name.split("/").pop();
     const ottData = ottDoc.fields;
-    const billingDay = parseInt(ottData.billingDay.integerValue || "1", 10);
-    if (today.getDate() !== billingDay) continue;
+    const ottId = ottDoc.name.split("/").pop();
+    const paymentDay = parseInt(ottData.billingDay.integerValue || "1", 10);
+    const price = parseInt(ottData.price.integerValue || "0", 10);
 
-    const price = parseInt(ottData.price.integerValue, 10);
-    const ottName = ottData.name.stringValue;
+    if (today.getDate() !== paymentDay) continue;
 
-    // 3️⃣ 해당 OTT에 active 참여자만 선택
-    const participants = subs
-      .filter((sub) => {
-        const subFields = sub.fields;
-        return (
-          subFields.ottId.stringValue === ottId &&
-          subFields.active.booleanValue === true
-        );
-      })
-      .map((sub) => sub.fields.memberId.stringValue);
+    // 참여 멤버 필터링
+    const activeSubs = subscriptions.filter(
+      (sub) =>
+        sub.fields.ottId.stringValue === ottId &&
+        sub.fields.active.booleanValue === true,
+    );
 
-    if (!participants.length) continue;
+    if (activeSubs.length === 0) continue;
 
-    const shareAmount = Math.ceil(price / participants.length);
+    const shareAmount = Math.floor(price / activeSubs.length);
 
-    // 4️⃣ 각 참여자별 settlement 항목 생성
-    for (const memberId of participants) {
-      const itemDoc = {
+    for (const sub of activeSubs) {
+      const memberId = sub.fields.memberId.stringValue;
+
+      const settlementDoc = {
         fields: {
           ottId: { stringValue: ottId },
-          ottName: { stringValue: ottName },
-          price: { integerValue: shareAmount },
-          status: { stringValue: "pending" }, // 미정산
+          memberId: { stringValue: memberId },
+          amount: { integerValue: shareAmount },
+          status: { stringValue: "pending" },
           createdAt: { timestampValue: today.toISOString() },
+          yearMonth: { stringValue: yearMonth },
         },
       };
-      const path = `settlements/${yearMonth}/members/${memberId}/items`;
-      const res = await firestoreRequest(path, "POST", itemDoc, token);
+
+      await firestoreRequest("settlements", "POST", settlementDoc, token);
       console.log(
-        `자동 정산 생성: ${ottName} -> ${memberId} (${yearMonth})`,
-        res.name || "",
+        `자동 정산 생성: OTT=${ottId}, Member=${memberId}, Amount=${shareAmount}`,
       );
     }
   }
 }
 
-autoSettlement().catch((err) => console.error("자동 정산 에러:", err));
+autoSettlement().catch((err) => {
+  console.error("자동 정산 에러:", err);
+});
