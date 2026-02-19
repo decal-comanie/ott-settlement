@@ -54,10 +54,6 @@ async function firestoreRequest(path, method = "GET", body, accessToken) {
 async function autoSettlement() {
   const token = await getAccessToken();
 
-  console.log("FIREBASE_PROJECT_ID", FIREBASE_PROJECT_ID);
-  console.log("FIREBASE_CLIENT_EMAIL", FIREBASE_CLIENT_EMAIL);
-  console.log("FIREBASE_PRIVATE_KEY", FIREBASE_PRIVATE_KEY);
-
   // 1️⃣ OTT 컬렉션 가져오기
   const ottsRes = await firestoreRequest("otts", "GET", null, token);
   if (ottsRes.error) {
@@ -76,7 +72,7 @@ async function autoSettlement() {
 
   for (const ottDoc of otts) {
     const ottData = ottDoc.fields;
-    const paymentDay = parseInt(ottData.paymentDay.integerValue || "1", 10);
+    const paymentDay = parseInt(ottData.billingDay.integerValue || "1", 10);
     if (today.getDate() !== paymentDay) continue;
 
     // settlements 컬렉션에 문서 생성
