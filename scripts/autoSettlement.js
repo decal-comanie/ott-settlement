@@ -46,7 +46,6 @@ async function firestoreRequest(path, method = "GET", body, accessToken) {
   if (body) options.body = JSON.stringify(body);
   const res = await fetch(url, options);
   const data = await res.json();
-  console.log(`${method} ${path} response:`, JSON.stringify(data, null, 2));
   return data;
 }
 
@@ -66,56 +65,53 @@ async function autoSettlement() {
     return;
   }
 
-  // 2️⃣ subscriptions 컬렉션 가져오기
-  const subsRes = await firestoreRequest("subscriptions", "GET", null, token);
-  if (subsRes.error) {
-    console.error("Subscriptions 조회 실패:", subsRes.error);
-    return;
-  }
-  const subscriptions = subsRes.documents || [];
-
-  // 3️⃣ 오늘 날짜 기준 정산 생성
   const today = new Date();
-  const yearMonth = `${today.getFullYear()}-${String(
-    today.getMonth() + 1,
-  ).padStart(2, "0")}`;
+  const yy = String(today.getFullYear()).slice(2); // 2자리 연도
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const datePrefix = `${yy}${mm}${dd}`;
 
+  // 2️⃣ 오늘 날짜 기준 OTT 결제일과 일치하는 경우 처리
   for (const ottDoc of otts) {
     const ottData = ottDoc.fields;
-    const ottId = ottDoc.name.split("/").pop();
     const paymentDay = parseInt(ottData.billingDay.integerValue || "1", 10);
-    const price = parseInt(ottData.price.integerValue || "0", 10);
-
     if (today.getDate() !== paymentDay) continue;
 
-    // 참여 멤버 필터링
-    const activeSubs = subscriptions.filter(
-      (sub) =>
-        sub.fields.ottId.stringValue === ottId &&
-        sub.fields.active.booleanValue === true,
+    // 3️⃣ subscriptions에서 해당 OTT 참여 멤버 가져오기
+    const subsRes = await firestoreRequest(`subscriptions`, "GET", null, token);
+    const subs = subsRes.documents || [];
+    const activeSubs = subs.filter(
+      (s) =>
+        s.fields.ottId.stringValue === ottDoc.name.split("/").pop() &&
+        s.fields.active.booleanValue === true,
     );
 
-    if (activeSubs.length === 0) continue;
+    const memberCount = activeSubs.length;
+    if (memberCount === 0) continue;
 
-    const shareAmount = Math.floor(price / activeSubs.length);
+    const price = parseInt(ottData.price.integerValue || "0", 10);
+    const shareAmount = Math.floor(price / memberCount);
 
     for (const sub of activeSubs) {
       const memberId = sub.fields.memberId.stringValue;
 
+      // settlements 컬렉션에 member별로 item 생성
       const settlementDoc = {
         fields: {
-          ottId: { stringValue: ottId },
           memberId: { stringValue: memberId },
+          ottId: { stringValue: ottDoc.name.split("/").pop() },
+          ottName: {
+            stringValue: `${datePrefix} ${ottData.name.stringValue}`,
+          },
           amount: { integerValue: shareAmount },
           status: { stringValue: "pending" },
           createdAt: { timestampValue: today.toISOString() },
-          yearMonth: { stringValue: yearMonth },
         },
       };
 
       await firestoreRequest("settlements", "POST", settlementDoc, token);
       console.log(
-        `자동 정산 생성: OTT=${ottId}, Member=${memberId}, Amount=${shareAmount}`,
+        `자동 정산 생성: ${settlementDoc.fields.ottName.stringValue} (${memberId})`,
       );
     }
   }
