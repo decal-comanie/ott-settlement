@@ -27,6 +27,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../firebase";
+import { useNavigate } from "react-router-dom";
 
 const ManagePage = () => {
   const [otts, setOtts] = useState([]);
@@ -41,11 +42,18 @@ const ManagePage = () => {
 
   const [newMemberName, setNewMemberName] = useState("");
 
+  const navigate = useNavigate();
+
   // 데이터 불러오기
   const fetchAll = async () => {
     const ottSnap = await getDocs(collection(db, "otts"));
     const memberSnap = await getDocs(collection(db, "members"));
     const subSnap = await getDocs(collection(db, "subscriptions"));
+
+    console.log(
+      "MEMEBERS",
+      memberSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    );
 
     setOtts(ottSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
     setMembers(memberSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -64,9 +72,16 @@ const ManagePage = () => {
       name: newOtt.name,
       price: Number(newOtt.price),
       billingDay: Number(newOtt.billingDay),
+      isDeleted: "false",
     });
 
     setNewOtt({ name: "", price: "", billingDay: "" });
+    fetchAll();
+  };
+
+  // OTT 삭제
+  const removeOtt = async (id) => {
+    await updateDoc(doc(db, "otts", id), { isDeleted: "true" });
     fetchAll();
   };
 
@@ -76,9 +91,16 @@ const ManagePage = () => {
 
     await addDoc(collection(db, "members"), {
       name: newMemberName,
+      isDeleted: "false",
     });
 
     setNewMemberName("");
+    fetchAll();
+  };
+
+  // 멤버 삭제
+  const removeMember = async (id) => {
+    await updateDoc(doc(db, "members", id), { isDeleted: "true" });
     fetchAll();
   };
 
@@ -112,19 +134,36 @@ const ManagePage = () => {
 
   return (
     <>
-      <AppBar position="static">
+      <Container
+        sx={{
+          mt: 4,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          flexDirection: "column",
+        }}
+      >
+        <Container
+          fullWidth
+          sx={{ display: "flex", justifyContent: "flex-end" }}
+        >
+          <Button
+            onClick={() => {
+              navigate("/settlement");
+            }}
+          >
+            정산페이지
+          </Button>
+        </Container>
         <Toolbar>
           <Typography variant="h6">OTT 관리자 페이지</Typography>
         </Toolbar>
-      </AppBar>
-
-      <Container sx={{ mt: 4 }}>
         {/* OTT 추가 */}
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6">OTT 추가</Typography>
             <Grid container spacing={2} mt={1}>
-              <Grid item xs={12} md={3}>
+              <Grid item size={{ xs: 12, md: 3 }}>
                 <TextField
                   label="OTT 이름"
                   fullWidth
@@ -134,7 +173,7 @@ const ManagePage = () => {
                   }
                 />
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid item size={{ xs: 12, md: 3 }}>
                 <TextField
                   label="가격"
                   type="number"
@@ -145,7 +184,7 @@ const ManagePage = () => {
                   }
                 />
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid item size={{ xs: 12, md: 3 }}>
                 <TextField
                   label="결제일 (1~31)"
                   type="number"
@@ -156,7 +195,7 @@ const ManagePage = () => {
                   }
                 />
               </Grid>
-              <Grid item xs={12} md={3}>
+              <Grid item size={{ xs: 12, md: 3 }}>
                 <Button
                   variant="contained"
                   fullWidth
@@ -171,35 +210,90 @@ const ManagePage = () => {
         </Card>
 
         {/* 멤버 추가 */}
+
         <Card sx={{ mb: 4 }}>
           <CardContent>
             <Typography variant="h6">멤버 추가</Typography>
-            <Box display="flex" gap={2} mt={2}>
-              <TextField
-                label="멤버 이름"
-                fullWidth
-                value={newMemberName}
-                onChange={(e) => setNewMemberName(e.target.value)}
-              />
-              <Button variant="contained" onClick={addMember}>
-                추가
-              </Button>
-            </Box>
+            <Grid container spacing={2} mt={1}>
+              <Grid item size={{ xs: 12, md: 9 }}>
+                <TextField
+                  label="멤버 이름"
+                  fullWidth
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                />
+              </Grid>
+
+              <Grid item size={{ xs: 12, md: 3 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  sx={{ height: "100%" }}
+                  onClick={addMember}
+                >
+                  추가
+                </Button>
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
+
+        {/* 멤버 목록 */}
+        <Grid container spacing={3}>
+          {members.map((member) => (
+            <Grid item size={{ xs: 12, md: 6 }} key={member.id}>
+              <Card sx={{ mb: 4 }}>
+                <CardContent
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Typography variant="h6" alignContent="center">
+                    {member.name}
+                  </Typography>
+                  <Button
+                    color="error"
+                    onClick={() => {
+                      removeMember(member.id);
+                    }}
+                  >
+                    삭제
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
 
         {/* 참여 토글 영역 */}
         <Grid container spacing={3}>
           {otts.map((ott) => (
-            <Grid item xs={12} md={6} key={ott.id}>
+            <Grid item size={{ xs: 12, md: 6 }} key={ott.id}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6">
-                    {ott.name} ({ott.price.toLocaleString()}원)
-                  </Typography>
-                  <Typography variant="body2" mb={2}>
-                    결제일: 매월 {ott.billingDay}일
-                  </Typography>
+                  <Box
+                    sx={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Box>
+                      <Typography variant="h6">
+                        {ott.name} ({ott.price.toLocaleString()}원)
+                      </Typography>
+                      <Typography variant="body2" mb={2}>
+                        결제일: 매월 {ott.billingDay}일
+                      </Typography>
+                    </Box>
+
+                    <Button
+                      color="error"
+                      onClick={() => {
+                        removeOtt(ott.id);
+                      }}
+                    >
+                      삭제
+                    </Button>
+                  </Box>
+
                   <Divider />
 
                   <List>

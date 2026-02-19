@@ -17,12 +17,15 @@ import {
 } from "@mui/material";
 import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
+import { useNavigate } from "react-router-dom";
 
 const SettlementPage = () => {
   const [members, setMembers] = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [selected, setSelected] = useState([]);
+
+  const navigate = useNavigate();
 
   // 1️⃣ 모든 데이터 가져오기
   const fetchData = async () => {
@@ -92,8 +95,70 @@ const SettlementPage = () => {
       .filter((s) => s.memberId === memberId)
       .reduce((sum, item) => sum + item.amount, 0);
 
+  // 월 계산
+  const getMonthString = () => {
+    const today = new Date();
+    return `${today.getMonth() + 1}월`;
+  };
+
+  // 1️⃣ 간단 복사
+  const copySimple = () => {
+    const month = getMonthString();
+    let text = `${month} 정산입니다.\n`;
+
+    members.forEach((member) => {
+      const memberItems = settlements.filter(
+        (s) => s.memberId === member.id && s.status === "pending",
+      );
+      const total = memberItems.reduce((sum, item) => sum + item.amount, 0);
+      text += `${member.name} : ${total.toLocaleString()}원\n`;
+    });
+
+    navigator.clipboard.writeText(text);
+  };
+
+  // 2️⃣ 상세 복사
+  const copyDetail = () => {
+    const month = getMonthString();
+    let text = `${month} 정산입니다.\n`;
+
+    members.forEach((member) => {
+      const memberItems = settlements.filter(
+        (s) => s.memberId === member.id && s.status === "pending",
+      );
+      const total = memberItems.reduce((sum, item) => sum + item.amount, 0);
+      text += `${member.name} : ${total.toLocaleString()}원\n`;
+
+      memberItems.forEach((item) => {
+        text += `- ${item.ottName} : ${item.amount.toLocaleString()}원\n`;
+      });
+    });
+
+    navigator.clipboard.writeText(text);
+  };
+
   return (
     <Container sx={{ mt: 4 }}>
+      <Container fullWidth sx={{ display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          onClick={() => {
+            navigate("/manage");
+          }}
+        >
+          관리페이지
+        </Button>
+      </Container>
+      <Toolbar>
+        <Typography variant="h6">OTT 정산 페이지</Typography>
+      </Toolbar>
+      <Box display="flex" justifyContent="space-around" gap={2} mb={2}>
+        <Button variant="contained" onClick={copySimple}>
+          간단 복사
+        </Button>
+        <Button variant="contained" onClick={copyDetail}>
+          상세 복사
+        </Button>
+      </Box>
       <Grid container spacing={3}>
         {members.map((member) => {
           const pendingList = getMemberSettlements(member.id, "pending");
@@ -102,14 +167,17 @@ const SettlementPage = () => {
           const totalAll = getTotalAll(member.id);
 
           return (
-            <Grid item xs={12} md={6} key={member.id}>
+            <Grid item size={{ xs: 12, md: 6 }} key={member.id}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6">{member.name}</Typography>
-                  <Typography variant="h5" color="error">
-                    {totalPending.toLocaleString()}원
-                  </Typography>
-                  <Box display="flex" gap={2} mt={2}>
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography variant="h6">{member.name}</Typography>
+                    <Typography variant="h5" color="error">
+                      {totalPending.toLocaleString()}원
+                    </Typography>
+                  </Box>
+
+                  <Box display="flex" justifyContent="flex-end" gap={2} mt={2}>
                     <Button
                       variant="outlined"
                       onClick={() => toggleExpand(member.id, "pending")}
@@ -191,10 +259,6 @@ const SettlementPage = () => {
                       )}
                     </Box>
                   </Collapse>
-
-                  <Typography variant="subtitle2" mt={1}>
-                    총 정산금액: {totalAll.toLocaleString()}원
-                  </Typography>
                 </CardContent>
               </Card>
             </Grid>

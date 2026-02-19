@@ -74,6 +74,7 @@ async function autoSettlement() {
   // 2️⃣ 오늘 날짜 기준 OTT 결제일과 일치하는 경우 처리
   for (const ottDoc of otts) {
     const ottData = ottDoc.fields;
+    if (ottData.isDeleted.stringValue === "true") continue;
     const paymentDay = parseInt(ottData.billingDay.integerValue || "1", 10);
     if (today.getDate() !== paymentDay) continue;
 
