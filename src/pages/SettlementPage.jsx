@@ -83,7 +83,9 @@ const SettlementPage = () => {
 
   // 5️⃣ 멤버별 데이터 필터링
   const getMemberSettlements = (memberId, status) =>
-    settlements.filter((s) => s.memberId === memberId && s.status === status);
+    settlements
+      .filter((s) => s.memberId === memberId && s.status === status)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
   const getTotalPending = (memberId) =>
     getMemberSettlements(memberId, "pending").reduce(
@@ -163,7 +165,9 @@ const SettlementPage = () => {
       <Grid container spacing={3}>
         {members.map((member) => {
           const pendingList = getMemberSettlements(member.id, "pending");
-          const allList = settlements.filter((s) => s.memberId === member.id);
+          const allList = settlements
+            .filter((s) => s.memberId === member.id)
+            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
           const totalPending = getTotalPending(member.id);
           const totalAll = getTotalAll(member.id);
 
