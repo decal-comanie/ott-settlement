@@ -65,7 +65,7 @@ async function autoSettlement() {
     return;
   }
 
-  const today = new Date();
+  const today = new Date(new Date().getTime() + 1000 * 60 * 6 * 9);
   const yy = String(today.getFullYear()).slice(2); // 2자리 연도
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
