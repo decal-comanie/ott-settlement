@@ -26,3 +26,14 @@ jobs:
                   FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
                   FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
                   FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+            - name: 환경변수 확인
+              run: |
+                  echo "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"
+                  echo "FIREBASE_CLIENT_EMAIL=$FIREBASE_CLIENT_EMAIL"
+                   # private_key는 전체 출력하지 말고 길이나 일부만 확인
+                  echo "FIREBASE_PRIVATE_KEY length=${#FIREBASE_PRIVATE_KEY}"
+              env:
+                  FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+                  FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+                  FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
