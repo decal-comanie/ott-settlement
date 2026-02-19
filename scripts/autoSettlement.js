@@ -71,6 +71,9 @@ async function autoSettlement() {
   const dd = String(today.getDate()).padStart(2, "0");
   const datePrefix = `${yy}${mm}${dd}`;
 
+  console.log("오늘날짜 : ", today);
+  console.log("오늘날짜2 : ", datePrefix);
+
   // 2️⃣ 오늘 날짜 기준 OTT 결제일과 일치하는 경우 처리
   for (const ottDoc of otts) {
     const ottData = ottDoc.fields;
