@@ -1,0 +1,28 @@
+name: Auto Settlement
+
+on:
+    schedule:
+        - cron: "0 15 * * *" # 한국시간 자정
+    workflow_dispatch:
+
+jobs:
+    run:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Node 설치
+              uses: actions/setup-node@v3
+              with:
+                  node-version: 18
+
+            - name: 패키지 설치
+              run: npm install node-fetch jsonwebtoken
+
+            - name: 자동 정산 실행
+              run: node scripts/autoSettlement.js
+              env:
+                  FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+                  FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+                  FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
