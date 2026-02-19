@@ -29,6 +29,15 @@ const SettlementPage = () => {
     const memberSnap = await getDocs(collection(db, "members"));
     const settlementSnap = await getDocs(collection(db, "settlements"));
 
+    console.log(
+      "memberSnap",
+      memberSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    );
+    console.log(
+      "settlementSnap",
+      settlementSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    );
+
     setMembers(memberSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
     setSettlements(settlementSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
   };
