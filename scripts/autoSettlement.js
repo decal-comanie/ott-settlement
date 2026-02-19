@@ -1,132 +1,93 @@
-/**
- * scripts/autoSettlement.js
- *
- * GitHub Actions에서 매일 실행용
- * Firebase REST API를 사용해 settlements 자동 생성
- */
-
+// scripts/autoSettlement.js
 import fetch from "node-fetch";
 import jwt from "jsonwebtoken";
 
-// 환경변수 가져오기
-const { FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, FIREBASE_PROJECT_ID } =
+// GitHub Secrets에서 환경변수 가져오기
+const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } =
   process.env;
 
-// 🔹 private key 줄바꿈 문제 해결
+// private_key 줄바꿈 처리
 const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n");
 
-// 🔹 OAuth 토큰 생성
+// Firebase OAuth 토큰 발급
 async function getAccessToken() {
-  const now = Math.floor(Date.now() / 1000);
-
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + 3600; // 1시간 유효
   const payload = {
     iss: FIREBASE_CLIENT_EMAIL,
     sub: FIREBASE_CLIENT_EMAIL,
     aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
+    iat,
+    exp,
     scope: "https://www.googleapis.com/auth/datastore",
   };
-
   const token = jwt.sign(payload, privateKey, { algorithm: "RS256" });
-
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: token,
-    }),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${token}`,
   });
-
   const data = await res.json();
-  return data.access_token;
+  if (data.access_token) return data.access_token;
+  console.error("AccessToken 발급 실패:", data);
+  process.exit(1);
 }
 
-// 🔹 Firestore REST 호출
+// Firestore REST API 요청 함수
 async function firestoreRequest(path, method = "GET", body, accessToken) {
   const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${path}`;
-
-  const res = await fetch(url, {
+  const options = {
     method,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  return res.json();
+  };
+  if (body) options.body = JSON.stringify(body);
+  const res = await fetch(url, options);
+  const data = await res.json();
+  console.log(`${method} ${path} response:`, JSON.stringify(data, null, 2));
+  return data;
 }
 
-// 🔹 메인 실행 함수
-async function run() {
-  const accessToken = await getAccessToken();
+// 자동 정산 실행
+async function autoSettlement() {
+  const token = await getAccessToken();
 
-  const today = new Date();
-  const todayDate = today.getDate();
-  const currentMonth = today.toISOString().slice(0, 7); // YYYY-MM
-
-  // 🔹 OTT 가져오기
-  const otts = await firestoreRequest("otts", "GET", null, accessToken);
-  console.log("OTTS response: ", JSON.stringify(otts, null, 2));
-  if (!otts.documents) return console.log("OTT 문서 없음");
-
-  for (const ottDoc of otts.documents) {
-    const ottId = ottDoc.name.split("/").pop();
-    const fields = ottDoc.fields;
-
-    const paymentDay = parseInt(fields.paymentDay.integerValue);
-    const price = parseInt(fields.monthlyFee.integerValue);
-    const ottName = fields.name.stringValue;
-    const isRecurring = fields.isRecurring.booleanValue;
-
-    if (!isRecurring) continue;
-    if (paymentDay !== todayDate) continue;
-
-    // 🔹 멤버 조회
-    const members = await firestoreRequest("members", "GET", null, accessToken);
-    if (!members.documents) continue;
-
-    const activeMembers = members.documents.filter(
-      (m) => m.fields.isParticipating.booleanValue === true,
-    );
-
-    const memberCount = activeMembers.length;
-    if (memberCount === 0) continue;
-
-    const amountPerPerson = Math.floor(price / memberCount);
-
-    for (const member of activeMembers) {
-      const memberId = member.name.split("/").pop();
-
-      // 🔹 문서 ID 고정 -> 중복 방지
-      const docId = `${memberId}_${ottId}_${currentMonth}`;
-
-      await firestoreRequest(
-        `settlements?documentId=${docId}`,
-        "POST",
-        {
-          fields: {
-            memberId: { stringValue: memberId },
-            ottId: { stringValue: ottId },
-            ottName: { stringValue: ottName },
-            amount: { integerValue: amountPerPerson },
-            status: { stringValue: "unsettled" },
-            paymentMonth: { stringValue: currentMonth },
-            createdAt: { timestampValue: new Date().toISOString() },
-            settledAt: { nullValue: null },
-          },
-        },
-        accessToken,
-      );
-    }
+  // 1️⃣ OTT 컬렉션 가져오기
+  const ottsRes = await firestoreRequest("otts", "GET", null, token);
+  if (ottsRes.error) {
+    console.error("OTTs 조회 실패:", ottsRes.error);
+    return;
+  }
+  const otts = ottsRes.documents || [];
+  if (otts.length === 0) {
+    console.log("OTT 문서 없음");
+    return;
   }
 
-  console.log("자동 정산 완료");
+  // 2️⃣ 오늘 날짜 기준 정산 생성
+  const today = new Date();
+  const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+  for (const ottDoc of otts) {
+    const ottData = ottDoc.fields;
+    const paymentDay = parseInt(ottData.paymentDay.integerValue || "1", 10);
+    if (today.getDate() !== paymentDay) continue;
+
+    // settlements 컬렉션에 문서 생성
+    const settlementDoc = {
+      fields: {
+        ottId: { stringValue: ottDoc.name.split("/").pop() }, // 문서 ID
+        yearMonth: { stringValue: yearMonth },
+        createdAt: { timestampValue: today.toISOString() },
+      },
+    };
+    await firestoreRequest("settlements", "POST", settlementDoc, token);
+    console.log(`자동 정산 생성: ${ottDoc.name} (${yearMonth})`);
+  }
 }
 
-run().catch((err) => {
+autoSettlement().catch((err) => {
   console.error("자동 정산 에러:", err);
-  process.exit(1);
 });
