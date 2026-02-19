@@ -109,7 +109,7 @@ async function autoSettlement() {
           },
           amount: { integerValue: shareAmount },
           status: { stringValue: "pending" },
-          createdAt: { timestampValue: today.toISOString() },
+          createdAt: { timestampValue: new Date().toISOString() },
         },
       };
 
