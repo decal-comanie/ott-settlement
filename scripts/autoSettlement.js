@@ -5,10 +5,10 @@
  * Firebase REST API를 사용해 settlements 자동 생성
  */
 
-const fetch = require("node-fetch");
-const jwt = require("jsonwebtoken");
+import fetch from "node-fetch";
+import jwt from "jsonwebtoken";
 
-// 🔹 GitHub Secrets에서 가져오기
+// 환경변수 가져오기
 const { FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, FIREBASE_PROJECT_ID } =
   process.env;
 
