@@ -240,84 +240,95 @@ const ManagePage = () => {
 
         {/* 멤버 목록 */}
         <Grid container spacing={3}>
-          {members.map((member) => (
-            <Grid item size={{ xs: 12, md: 6 }} key={member.id}>
-              <Card sx={{ mb: 4 }}>
-                <CardContent
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Typography variant="h6" alignContent="center">
-                    {member.name}
-                  </Typography>
-                  <Button
-                    color="error"
-                    onClick={() => {
-                      removeMember(member.id);
+          {members
+            .filter((member) => member.isDeleted === "false")
+            .map((member) => (
+              <Grid item size={{ xs: 12, md: 6 }} key={member.id}>
+                <Card sx={{ mb: 4 }}>
+                  <CardContent
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
                     }}
                   >
-                    삭제
-                  </Button>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* 참여 토글 영역 */}
-        <Grid container spacing={3}>
-          {otts.map((ott) => (
-            <Grid item size={{ xs: 12, md: 6 }} key={ott.id}>
-              <Card>
-                <CardContent>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <Box>
-                      <Typography variant="h6">
-                        {ott.name} ({ott.price.toLocaleString()}원)
-                      </Typography>
-                      <Typography variant="body2" mb={2}>
-                        결제일: 매월 {ott.billingDay}일
-                      </Typography>
-                    </Box>
-
+                    <Typography variant="h6" alignContent="center">
+                      {member.name}
+                    </Typography>
                     <Button
                       color="error"
                       onClick={() => {
-                        removeOtt(ott.id);
+                        removeMember(member.id);
+                        setMembers((prev) =>
+                          prev.filter((m) => m.id !== member.id),
+                        );
                       }}
                     >
                       삭제
                     </Button>
-                  </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+        </Grid>
 
-                  <Divider />
+        {/* 참여 토글 영역 */}
+        <Grid container spacing={3}>
+          {otts
+            .filter((ott) => ott.isDeleted === "false")
+            .sort((a, b) => a.billingDay - b.billingDay)
+            .map((ott) => (
+              <Grid item size={{ xs: 12, md: 6 }} key={ott.id}>
+                <Card>
+                  <CardContent>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between" }}
+                    >
+                      <Box>
+                        <Typography variant="h6">
+                          {ott.name} ({ott.price.toLocaleString()}원)
+                        </Typography>
+                        <Typography variant="body2" mb={2}>
+                          결제일: 매월 {ott.billingDay}일
+                        </Typography>
+                      </Box>
 
-                  <List>
-                    {members.map((member) => (
-                      <ListItem key={member.id}>
-                        <ListItemText primary={member.name} />
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={isActive(ott.id, member.id)}
-                              onChange={() =>
-                                toggleSubscription(ott.id, member.id)
-                              }
-                            />
-                          }
-                          label="참여"
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+                      <Button
+                        color="error"
+                        onClick={() => {
+                          removeOtt(ott.id);
+                          setOtts((prev) =>
+                            prev.filter((o) => o.id !== ott.id),
+                          );
+                        }}
+                      >
+                        삭제
+                      </Button>
+                    </Box>
+
+                    <Divider />
+
+                    <List>
+                      {members.map((member) => (
+                        <ListItem key={member.id}>
+                          <ListItemText primary={member.name} />
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={isActive(ott.id, member.id)}
+                                onChange={() =>
+                                  toggleSubscription(ott.id, member.id)
+                                }
+                              />
+                            }
+                            label="참여"
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
         </Grid>
       </Container>
     </>
